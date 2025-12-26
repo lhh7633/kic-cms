@@ -5,28 +5,30 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 import io
 
-# 1. 설정 (이 부분의 ID들을 실제 주소창에서 확인한 값으로 넣어주세요)
-SPREADSHEET_ID = "1q1GuRNow4naFj87WmznVTT00SSH4yhuiLQykVEjKww"  # 구글 시트 ID
-FOLDER_ID = "1xk5ERGG6qEHQoVcCvOtJbbiAq35ITVFc"        # 구글 드라이브 폴더 ID (S가 아니라 5인지 확인!)
+# 1. 설정 (확인된 정확한 ID 값들입니다)
+SPREADSHEET_ID = "1q1GuRNow4naFj87WmznVTT00SSH4yhuiLQykVEjKww"
+FOLDER_ID = "1xk5ERGG6qEHQoVcCvOtJbbiAq35ITVFc"
 
-# 2. 구글 서비스 인증 함수
+# 2. 구글 서비스 인증 함수 (에러 수정됨)
 def get_gcp_credentials():
-    creds_info = st.secrets["gcp_service_account"]
-    # JSON 내의 \n 문자를 실제 줄바꿈으로 변환하여 인증 객체 생성
-    creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
+    # st.secrets는 읽기 전용이므로 dict()로 복사본을 만들어야 합니다.
+    creds_dict = dict(st.secrets["gcp_service_account"])
+    # 복사본의 private_key 내 \n 문자를 실제 줄바꿈으로 변환
+    creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+    
     return service_account.Credentials.from_service_account_info(
-        creds_info, 
+        creds_dict, 
         scopes=[
             "https://www.googleapis.com/auth/spreadsheets",
             "https://www.googleapis.com/auth/drive"
         ]
     )
 
-# 3. 메인 앱 화면
+# 3. 메인 앱 화면 설정
 st.set_page_config(page_title="KIC 교정관리시스템", layout="wide")
 st.title("📟 KIC 교정관리시스템 (CMS)")
 
-# 서비스 연결 상태 확인 (사이드바)
+# 서비스 연결 상태 확인
 try:
     creds = get_gcp_credentials()
     sheet_service = build('sheets', 'v4', credentials=creds)
@@ -71,7 +73,7 @@ if submit_button:
                         resumable=True
                     )
                     
-                    # [핵심] supportsAllDrives=True 옵션 추가 (용량 문제 해결)
+                    # supportsAllDrives=True 옵션으로 서비스 계정 용량 문제 해결
                     file = drive_service.files().create(
                         body=file_metadata,
                         media_body=media,
@@ -84,7 +86,7 @@ if submit_button:
                 new_row = [reg_num, company, device_name, device_id, status, file_link]
                 sheet_service.spreadsheets().values().append(
                     spreadsheetId=SPREADSHEET_ID,
-                    range="시트1!A2",  # '시트1' 이름이 다르면 수정하세요
+                    range="시트1!A2",
                     valueInputOption="USER_ENTERED",
                     body={"values": [new_row]}
                 ).execute()
@@ -95,7 +97,7 @@ if submit_button:
         except Exception as e:
             st.error(f"❌ 작업 중 오류 발생: {e}")
 
-# 6. 실시간 현황판 (구글 시트 데이터 불러오기)
+# 6. 실시간 현황판
 st.divider()
 st.subheader("📊 실시간 접수 현황 (구글 시트)")
 try:
