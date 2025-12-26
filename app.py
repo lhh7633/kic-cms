@@ -8,8 +8,8 @@ from datetime import datetime
 
 # --- 1. 환경 설정 ---
 # 시트 ID와 폴더 ID는 사용자님의 것으로 유지합니다.
-SPREADSHEET_ID = '1q1GuRNow4naFj87WmznVTT00SSH4yhyuiLQykVEjKww' 
-FOLDER_ID = '1xk5ERGG6qEHqoVcCv0tJbbiAq3SITVFc'
+SPREADSHEET_ID = '1q1GuRNow4naFj87WMznVTT00SSH4yhyuiLQykVEjKww' 
+FOLDER_ID = '1xk5ERGG6qEHQoVcCvOtJbbiAq35ITVFc'
 
 # 구글 API 권한 설정
 SCOPES = [
@@ -124,4 +124,5 @@ if sheet_service:
         else:
             st.info("시트에 데이터가 없습니다.")
     except Exception as e:
+
         st.info("데이터를 불러오는 중입니다...")
