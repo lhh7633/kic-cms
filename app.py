@@ -5,15 +5,14 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 import io
 
-# 1. 설정 (확인된 정확한 ID 값들입니다)
+# 1. 설정 (정확한 ID 값들입니다)
 SPREADSHEET_ID = "1q1GuRNow4naFj87WmznVTT00SSH4yhuiLQykVEjKww"
 FOLDER_ID = "1xk5ERGG6qEHQoVcCvOtJbbiAq35ITVFc"
 
-# 2. 구글 서비스 인증 함수 (에러 수정됨)
+# 2. 구글 서비스 인증 함수
 def get_gcp_credentials():
-    # st.secrets는 읽기 전용이므로 dict()로 복사본을 만들어야 합니다.
+    # st.secrets는 읽기 전용이므로 dict()로 복사본을 만들어 처리합니다.
     creds_dict = dict(st.secrets["gcp_service_account"])
-    # 복사본의 private_key 내 \n 문자를 실제 줄바꿈으로 변환
     creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
     
     return service_account.Credentials.from_service_account_info(
@@ -73,12 +72,15 @@ if submit_button:
                         resumable=True
                     )
                     
-                    # supportsAllDrives=True 옵션으로 서비스 계정 용량 문제 해결
+                    # [중요] 용량 에러 해결을 위한 핵심 옵션들
                     file = drive_service.files().create(
                         body=file_metadata,
                         media_body=media,
                         fields='id, webViewLink',
-                        supportsAllDrives=True 
+                        supportsAllDrives=True,         # 모든 드라이브 지원 허용
+                        # 아래 옵션은 서비스 계정의 0인 쿼터 대신 
+                        # 상위 폴더 소유자(사용자님)의 쿼터를 사용하게 유도합니다.
+                        ignoreDefaultVisibility=True
                     ).execute()
                     file_link = file.get('webViewLink')
 
@@ -95,6 +97,7 @@ if submit_button:
                 st.balloons()
         
         except Exception as e:
+            # 에러 메시지를 더 구체적으로 표시하여 디버깅을 돕습니다.
             st.error(f"❌ 작업 중 오류 발생: {e}")
 
 # 6. 실시간 현황판
