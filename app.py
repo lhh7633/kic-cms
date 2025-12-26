@@ -1,62 +1,116 @@
 import streamlit as st
 import pandas as pd
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
+import io
+import datetime
 
-# 0. 구글 시트 연결 정보 (사용자님이 주신 ID 적용)
-SHEET_ID = "1Rb5SLoJqjOw1G7sWrIwwq4SzqCmhu-Ng8SrkddtZvMs"
-SHEET_NAME = "Sheet1"  # 만약 엑셀 시트 하단 이름이 'Sheet1'이 아니면 그 이름으로 바꿔주세요
-URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={SHEET_NAME}"
+# --- 1. 환경 설정 (전달해주신 ID 적용) ---
+SERVICE_ACCOUNT_FILE = 'service_account.json'  # 서비스 계정 키 파일명
+SPREADSHEET_ID = '1q1GuRNow4naFj87WMznVTT00SSH4yhyuiLQykVEjKww'
+FOLDER_ID = '1xk5ERGG6qEHQoVcCvOtJbbiAq35ITVFc'
 
-st.set_page_config(page_title="KIC 실시간 클라우드 전산", layout="wide")
+# 구글 API 권한 설정
+SCOPES = [
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/drive'
+]
 
-# 1. 실시간 데이터 로드 함수
-@st.cache_data(ttl=60) # 1분마다 자동으로 새 데이터를 업데이트합니다.
-def load_data():
-    return pd.read_csv(URL)
+# API 연결 함수
+def get_gspread_service():
+    try:
+        creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+        sheet_service = build('sheets', 'v4', credentials=creds)
+        drive_service = build('drive', 'v3', credentials=creds)
+        return sheet_service, drive_service
+    except Exception as e:
+        st.error(f"인증 파일 확인 실패: {e}")
+        return None, None
+
+sheet_service, drive_service = get_gspread_service()
+
+# --- 2. 화면 구성 ---
+st.set_page_config(page_title="KIC CMS 업로드 시스템", layout="wide")
+st.title("📟 KIC 교정관리시스템 (CMS)")
+
+# 사이드바 구성
+with st.sidebar:
+    st.header("관리 메뉴")
+    st.info("현재 구글 시트 및 드라이브와 연결됨")
+
+# 데이터 입력 폼
+with st.form("upload_form", clear_on_submit=True):
+    st.subheader("📥 신규 접수 및 성적서 등록")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        reg_num = st.text_input("A. 접수번호", placeholder="예: 25031380")
+        company = st.text_input("B. 업체명")
+        device = st.text_input("C. 계측기명")
+    with col2:
+        serial = st.text_input("D. 기기번호")
+        status = st.selectbox("E. 상태", ["접수대기", "입고완료", "교정중", "교정완료"])
+        # 파일 업로드 (성적서 링크용)
+        uploaded_file = st.file_uploader("F. 성적서 파일 업로드 (PDF, 이미지 등)", type=['pdf', 'png', 'jpg', 'jpeg', 'xlsx', 'csv'])
+    
+    submit_button = st.form_submit_button("데이터 저장 및 파일 업로드")
+
+# --- 3. 저장 로직 ---
+if submit_button:
+    if not reg_num or not company:
+        st.error("접수번호와 업체명은 필수 입력 사항입니다.")
+    elif sheet_service is None:
+        st.error("구글 서비스 인증에 실패했습니다. service_account.json 파일을 확인하세요.")
+    else:
+        with st.spinner("구글 클라우드에 데이터를 기록 중입니다..."):
+            try:
+                file_link = ""
+                
+                # (1) 구글 드라이브에 파일 업로드
+                if uploaded_file is not None:
+                    file_metadata = {
+                        'name': f"{reg_num}_{uploaded_file.name}", # 파일명 앞에 접수번호를 붙여 관리하기 편하게 함
+                        'parents': [FOLDER_ID]
+                    }
+                    media = MediaIoBaseUpload(io.BytesIO(uploaded_file.read()), mimetype=uploaded_file.type)
+                    file = drive_service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
+                    file_link = file.get('webViewLink')
+
+                # (2) 구글 시트에 데이터 기록 (A~F열 순서)
+                # 시트에 적으신 순서: [접수번호, 업체명, 계측기명, 기기번호, 상태, 성적서링크]
+                new_row = [reg_num, company, device, serial, status, file_link]
+                
+                body = {'values': [new_row]}
+                sheet_service.spreadsheets().values().append(
+                    spreadsheetId=SPREADSHEET_ID,
+                    range="Sheet1!A2", # A1은 제목이므로 A2부터 추가
+                    valueInputOption="USER_ENTERED",
+                    body=body
+                ).execute()
+                
+                st.success(f"✅ [{company}] 데이터가 성공적으로 저장되었습니다!")
+                if file_link:
+                    st.info(f"🔗 [업로드된 성적서 확인하기]({file_link})")
+            
+            except Exception as e:
+                st.error(f"오류 발생: {e}")
+
+# --- 4. 시트 데이터 실시간 조회 ---
+st.divider()
+st.subheader("📊 실시간 접수 현황 (구글 시트)")
 
 try:
-    df = load_data()
-
-    # 2. 사이드바
-    with st.sidebar:
-        st.title("🌐 KIC CMS")
-        st.success("구글 클라우드 연결됨")
-        menu = st.radio("메뉴", ["📊 실시간 대시보드", "🔍 데이터 상세조회"])
-        if st.button("🔄 데이터 강제 새로고침"):
-            st.cache_data.clear()
-            st.rerun()
-
-    if menu == "📊 실시간 대시보드":
-        st.title("📊 KIC 실시간 업무 현황 (Cloud)")
+    if sheet_service:
+        # 데이터 가져오기
+        result = sheet_service.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID, range="Sheet1!A:F").execute()
+        values = result.get('values', [])
         
-        # 지표 계산
-        total = len(df)
-        # 엑셀의 '교정상태' 컬럼을 기준으로 카운트
-        status = df['교정상태'].value_counts() if '교정상태' in df.columns else {}
-        
-        c1, c2, c3 = st.columns(3)
-        c1.metric("총 접수 건수", f"{total} 건")
-        c2.metric("사외대기", f"{status.get('사외대기', 0)} 건")
-        c3.metric("계산대기", f"{status.get('계산대기', 0)} 건")
-        
-        st.divider()
-        st.subheader("🏢 업체별 접수 현황 (Top 10)")
-        if '업체명' in df.columns:
-            st.bar_chart(df['업체명'].value_counts().head(10))
-
-    elif menu == "🔍 데이터 상세조회":
-        st.title("🔍 데이터 실시간 검색")
-        search = st.text_input("업체명 또는 계측기명을 입력하세요")
-        
-        if search:
-            # 업체명 또는 계측기명에 검색어가 포함된 데이터 필터링
-            mask = df.astype(str).apply(lambda x: x.str.contains(search, na=False)).any(axis=1)
-            filtered_df = df[mask]
-            st.write(f"검색 결과: {len(filtered_df)}건")
-            st.dataframe(filtered_df, use_container_width=True)
+        if len(values) > 1:
+            # 첫 번째 줄은 헤더(제목), 그 다음부터는 데이터
+            df_display = pd.DataFrame(values[1:], columns=values[0])
+            st.dataframe(df_display, use_container_width=True)
         else:
-            st.dataframe(df, use_container_width=True)
-
+            st.write("현재 등록된 데이터가 없습니다. 첫 행에 제목을 적으셨는지 확인하세요.")
 except Exception as e:
-    st.error("⚠️ 구글 시트 데이터를 불러올 수 없습니다.")
-    st.info("체크리스트: 1. 구글 시트 공유 설정이 '링크가 있는 모든 사용자-뷰어'인가? 2. 시트 탭 이름이 'Sheet1'인가?")
-    st.write(f"오류 내용: {e}")
+    st.info("시트 데이터를 불러오는 중입니다. 잠시만 기다려주세요.")
