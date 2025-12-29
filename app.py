@@ -80,7 +80,7 @@ if submit_button:
                 new_row = [reg_num, company, device_name, device_id, status, file_link]
                 sheet_service.spreadsheets().values().append(
                     spreadsheetId=SPREADSHEET_ID,
-                    range="시트1!A2",
+                    range="Sheet1!A2",
                     valueInputOption="USER_ENTERED",
                     body={"values": [new_row]}
                 ).execute()
@@ -108,4 +108,5 @@ try:
         st.dataframe(df, use_container_width=True)
 except Exception as e:
     st.info("데이터를 불러오는 중입니다...")
+
 
