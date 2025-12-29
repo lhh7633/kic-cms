@@ -7,7 +7,7 @@ from googleapiclient.http import MediaIoBaseUpload
 import io
 
 # 1. 설정 (ID 확인 완료)
-SPREADSHEET_ID = "1q1GuRNow4naFj87WmznVTT00SSH4yhuiLQykVEjKww"
+SPREADSHEET_ID = "1q1GuRNow4naFj87WMznVTT00SSH4yhyuiLQykVEjKww"
 FOLDER_ID = "1xk5ERGG6qEHQoVcCvOtJbbiAq35ITVFc"
 
 # 2. 인증 함수
@@ -88,3 +88,4 @@ try:
         st.dataframe(df, use_container_width=True)
 except Exception as e:
     st.info("데이터를 불러오는 중입니다...")
+
