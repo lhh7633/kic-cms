@@ -97,7 +97,7 @@ st.subheader("📊 실시간 접수 현황 (구글 시트)")
 try:
     result = sheet_service.spreadsheets().values().get(
         spreadsheetId=SPREADSHEET_ID,
-        range="시트1!A:F"
+        range="Sheet1!A:F"
     ).execute()
     values = result.get('values', [])
 
@@ -108,3 +108,4 @@ try:
         st.dataframe(df, use_container_width=True)
 except Exception as e:
     st.info("데이터를 불러오는 중입니다...")
+
