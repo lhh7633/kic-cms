@@ -1,27 +1,23 @@
 import streamlit as st
 import pandas as pd
-from google.oauth2 import service_account
+import json
+from google.oauth2.credentials import Credentials  # OAuth용 인증 모듈
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 import io
 
-# 1. 설정 (정확한 ID 값들입니다)
+# 1. 설정 (확인된 정확한 ID 값들)
 SPREADSHEET_ID = "1q1GuRNow4naFj87WmznVTT00SSH4yhuiLQykVEjKww"
 FOLDER_ID = "1xk5ERGG6qEHQoVcCvOtJbbiAq35ITVFc"
 
-# 2. 구글 서비스 인증 함수
+# 2. 구글 서비스 인증 함수 (OAuth 방식 - 개인 계정 권한 사용)
 def get_gcp_credentials():
-    # st.secrets는 읽기 전용이므로 dict()로 복사본을 만들어 처리합니다.
-    creds_dict = dict(st.secrets["gcp_service_account"])
-    creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+    # Secrets에 저장된 토큰 정보를 가져옴
+    token_info = json.loads(st.secrets["google_token"]["token_json"])
     
-    return service_account.Credentials.from_service_account_info(
-        creds_dict, 
-        scopes=[
-            "https://www.googleapis.com/auth/spreadsheets",
-            "https://www.googleapis.com/auth/drive"
-        ]
-    )
+    # 토큰 정보를 이용해 인증 객체 생성
+    creds = Credentials.from_authorized_user_info(token_info)
+    return creds
 
 # 3. 메인 앱 화면 설정
 st.set_page_config(page_title="KIC 교정관리시스템", layout="wide")
@@ -72,15 +68,11 @@ if submit_button:
                         resumable=True
                     )
                     
-                    # [중요] 용량 에러 해결을 위한 핵심 옵션들
+                    # OAuth 방식은 별도 옵션 없이도 개인 권한으로 업로드됩니다.
                     file = drive_service.files().create(
                         body=file_metadata,
                         media_body=media,
-                        fields='id, webViewLink',
-                        supportsAllDrives=True,         # 모든 드라이브 지원 허용
-                        # 아래 옵션은 서비스 계정의 0인 쿼터 대신 
-                        # 상위 폴더 소유자(사용자님)의 쿼터를 사용하게 유도합니다.
-                        ignoreDefaultVisibility=True
+                        fields='id, webViewLink'
                     ).execute()
                     file_link = file.get('webViewLink')
 
@@ -97,7 +89,6 @@ if submit_button:
                 st.balloons()
         
         except Exception as e:
-            # 에러 메시지를 더 구체적으로 표시하여 디버깅을 돕습니다.
             st.error(f"❌ 작업 중 오류 발생: {e}")
 
 # 6. 실시간 현황판
